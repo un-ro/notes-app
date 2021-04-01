@@ -1,13 +1,18 @@
 package com.unero.mynotesapp
 
 import android.content.Intent
+import android.database.ContentObserver
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.view.View
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.unero.mynotesapp.adapter.NoteAdapter
 import com.unero.mynotesapp.databinding.ActivityMainBinding
+import com.unero.mynotesapp.db.DatabaseContract
+import com.unero.mynotesapp.db.DatabaseContract.NoteColumns.Companion.CINTENT_URI
 import com.unero.mynotesapp.db.NoteHelper
 import com.unero.mynotesapp.entity.Note
 import com.unero.mynotesapp.helper.MappingHelper
@@ -17,7 +22,6 @@ import kotlinx.coroutines.*
 class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: NoteAdapter
-
     private lateinit var binding: ActivityMainBinding
 
     companion object {
@@ -30,6 +34,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         supportActionBar?.title = "Notes"
+
         binding.rvNotes.layoutManager = LinearLayoutManager(this)
         binding.rvNotes.setHasFixedSize(true)
         adapter = NoteAdapter(this)
@@ -37,17 +42,26 @@ class MainActivity : AppCompatActivity() {
 
         binding.fabAdd.setOnClickListener {
             val intent = Intent(this@MainActivity, NoteAddUpdateActivity::class.java)
-            startActivityForResult(intent, NoteAddUpdateActivity.REQUEST_ADD)
+            startActivity(intent)
         }
+
+        val handlerThread = HandlerThread("DataObserver")
+        handlerThread.start()
+        val handler = Handler(handlerThread.looper)
+
+        val myObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                loadNotesAsync()
+            }
+        }
+
+        contentResolver.registerContentObserver(CINTENT_URI, true, myObserver)
 
         if (savedInstanceState == null) {
             // proses ambil data
             loadNotesAsync()
         } else {
-            val list = savedInstanceState.getParcelableArrayList<Note>(EXTRA_STATE)
-            if (list != null) {
-                adapter.listNotes = list
-            }
+            savedInstanceState.getParcelableArrayList<Note>(EXTRA_STATE)?.also { adapter.listNotes = it }
         }
     }
 
@@ -57,7 +71,7 @@ class MainActivity : AppCompatActivity() {
             val noteHelper = NoteHelper.getInstance(applicationContext)
             noteHelper.open()
             val deferredNotes = async(Dispatchers.IO) {
-                val cursor = noteHelper.queryAll()
+                val cursor = contentResolver.query(CINTENT_URI, null, null, null)
                 MappingHelper.mapCursorToArrayList(cursor)
             }
             binding.progressbar.visibility = View.INVISIBLE
@@ -69,36 +83,6 @@ class MainActivity : AppCompatActivity() {
                 showSnackbarMessage("Tidak ada data saat ini")
             }
             noteHelper.close()
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (data != null) {
-            when (requestCode) {
-                NoteAddUpdateActivity.REQUEST_ADD -> if (resultCode == NoteAddUpdateActivity.RESULT_ADD) {
-                    val note = data.getParcelableExtra<Note>(NoteAddUpdateActivity.EXTRA_NOTE) as Note
-                    adapter.addItem(note)
-                    binding.rvNotes.smoothScrollToPosition(adapter.itemCount - 1)
-                    showSnackbarMessage("Satu item berhasil ditambahkan")
-                }
-                NoteAddUpdateActivity.REQUEST_UPDATE ->
-                    when (resultCode) {
-                        NoteAddUpdateActivity.RESULT_UPDATE -> {
-                            val note = data.getParcelableExtra<Note>(NoteAddUpdateActivity.EXTRA_NOTE) as Note
-                            val position = data.getIntExtra(NoteAddUpdateActivity.EXTRA_POSITION, 0)
-                            adapter.updateItem(position, note)
-                            binding.rvNotes.smoothScrollToPosition(position)
-                            showSnackbarMessage("Satu item berhasil diubah")
-                        }
-                        NoteAddUpdateActivity.RESULT_DELETE -> {
-                            val position = data.getIntExtra(NoteAddUpdateActivity.EXTRA_POSITION, 0)
-                            adapter.removeItem(position)
-                            showSnackbarMessage("Satu item berhasil dihapus")
-                        }
-                    }
-            }
         }
     }
 

@@ -2,7 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.unero.mynotesapp">
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="com.unero.mynotesapp.READ_DATABASE" android:protectionLevel="normal"/>
+    <uses-permission android:name="com.unero.mynotesapp.WRITE_DATABASE" android:protectionLevel="normal"/>
 
     <application
         android:allowBackup="true"
@@ -11,7 +13,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyNotesApp">
-        <activity android:name=".NoteAddUpdateActivity"></activity>
+        <provider
+            android:name=".provider.NoteProvider"
+            android:authorities="com.unero.mynotesapp"
+            android:enabled="true"
+            android:exported="true"
+            android:readPermission="com.unero.mynotesapp.READ_DATABASE"
+            android:writePermission="com.unero.mynotesapp.WRITE_DATABASE"/>
+
+        <activity android:name=".NoteAddUpdateActivity" />
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
